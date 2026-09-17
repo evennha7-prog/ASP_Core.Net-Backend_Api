@@ -1,4 +1,5 @@
 using backend_api.DTOs.Auth;
+using backend_api.Exceptions;
 using backend_api.Helpers;
 using backend_api.Models;
 using backend_api.Repositories.Interfaces;
@@ -39,13 +40,13 @@ namespace backend_api.Services
             // Enforce username uniqueness
             if (await _userRepository.ExistsByUsernameAsync(request.Username))
             {
-                throw new ApplicationException("Username is already taken.");
+                throw new ConflictException("Username is already taken.");
             }
 
             // Enforce email uniqueness
             if (await _userRepository.ExistsByEmailAsync(request.Email))
             {
-                throw new ApplicationException("Email is already registered.");
+                throw new ConflictException("Email is already registered.");
             }
 
             // Hash password with BCrypt (salted, work factor 11)
@@ -91,7 +92,7 @@ namespace backend_api.Services
             var user = await _userRepository.GetByEmailOrUsernameAsync(request.EmailOrUsername);
             if (user == null || !PasswordHasher.VerifyPassword(request.Password, user.PasswordHash))
             {
-                throw new UnauthorizedAccessException("Invalid credentials.");
+                throw new UnauthorizedException("Invalid credentials. Please check your username/email and password.");
             }
 
             // Generate JWT authentication token

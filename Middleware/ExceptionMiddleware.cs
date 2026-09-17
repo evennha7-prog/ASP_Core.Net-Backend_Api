@@ -1,5 +1,7 @@
 using System.Net;
 using System.Text.Json;
+using backend_api.DTOs.Common;
+using backend_api.Exceptions;
 
 namespace backend_api.Middleware
 {
@@ -11,22 +13,27 @@ namespace backend_api.Middleware
     {
         private readonly RequestDelegate _next;
         private readonly ILogger<ExceptionMiddleware> _logger;
+        private readonly IHostEnvironment _env;
+
+        private static readonly JsonSerializerOptions JsonOptions = new()
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            WriteIndented = false
+        };
 
         /// <summary>
-        /// Initializes the exception middleware with the next delegate and logger.
+        /// Initializes the exception middleware with dependencies.
         /// </summary>
-        /// <param name="next">The next middleware in the ASP.NET pipeline.</param>
-        /// <param name="logger">Logger instance for capturing error traces.</param>
-        public ExceptionMiddleware(RequestDelegate next, ILogger<ExceptionMiddleware> logger)
+        public ExceptionMiddleware(RequestDelegate next, ILogger<ExceptionMiddleware> logger, IHostEnvironment env)
         {
             _next = next;
             _logger = logger;
+            _env = env;
         }
 
         /// <summary>
         /// Executes the middleware pipeline within a try/catch block.
         /// </summary>
-        /// <param name="context">The current HTTP context.</param>
         public async Task InvokeAsync(HttpContext context)
         {
             try
@@ -35,47 +42,86 @@ namespace backend_api.Middleware
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "An unhandled exception occurred: {Message}", ex.Message);
+                _logger.LogError(ex, "Unhandled exception occurred: {Message}", ex.Message);
                 await HandleExceptionAsync(context, ex);
             }
         }
 
         /// <summary>
-        /// Translates known exception types into appropriate HTTP status codes and serializes a JSON payload.
+        /// Translates known exception types into standard HTTP status codes and serializes an ErrorResponse.
         /// </summary>
-        /// <param name="context">The current HTTP context.</param>
-        /// <param name="exception">The unhandled exception caught.</param>
-        /// <returns>A Task representing the asynchronous write operation.</returns>
-        private static Task HandleExceptionAsync(HttpContext context, Exception exception)
+        private Task HandleExceptionAsync(HttpContext context, Exception exception)
         {
             context.Response.ContentType = "application/json";
 
-            // Map custom application exception types to HTTP status codes
-            var statusCode = exception switch
+            var (statusCode, message, errors) = exception switch
             {
-                UnauthorizedAccessException => (int)HttpStatusCode.Unauthorized, // 401
-                ApplicationException => (int)HttpStatusCode.BadRequest,          // 400
-                ArgumentException => (int)HttpStatusCode.BadRequest,             // 400
-                KeyNotFoundException => (int)HttpStatusCode.NotFound,            // 404
-                _ => (int)HttpStatusCode.InternalServerError                     // 500
+                ValidationException valEx => (
+                    (int)HttpStatusCode.BadRequest,
+                    valEx.Message,
+                    valEx.Errors
+                ),
+                UnauthorizedException unauthEx => (
+                    (int)HttpStatusCode.Unauthorized,
+                    unauthEx.Message,
+                    null
+                ),
+                UnauthorizedAccessException unauthAccEx => (
+                    (int)HttpStatusCode.Unauthorized,
+                    unauthAccEx.Message,
+                    null
+                ),
+                ForbiddenException forbEx => (
+                    (int)HttpStatusCode.Forbidden,
+                    forbEx.Message,
+                    null
+                ),
+                NotFoundException notFoundEx => (
+                    (int)HttpStatusCode.NotFound,
+                    notFoundEx.Message,
+                    null
+                ),
+                ConflictException confEx => (
+                    (int)HttpStatusCode.Conflict,
+                    confEx.Message,
+                    null
+                ),
+                KeyNotFoundException keyEx => (
+                    (int)HttpStatusCode.NotFound,
+                    keyEx.Message,
+                    null
+                ),
+                ArgumentException argEx => (
+                    (int)HttpStatusCode.BadRequest,
+                    argEx.Message,
+                    null
+                ),
+                ApplicationException appEx => (
+                    (int)HttpStatusCode.BadRequest,
+                    appEx.Message,
+                    null
+                ),
+                _ => (
+                    (int)HttpStatusCode.InternalServerError,
+                    "An unexpected error occurred. Please try again later.",
+                    null
+                )
             };
 
             context.Response.StatusCode = statusCode;
 
-            // Structure a clean JSON error response
-            var response = new
+            var errorResponse = new ErrorResponse
             {
-                success = false,
-                statusCode = statusCode,
-                message = exception.Message,
-                details = statusCode == 500 ? "An unexpected server error occurred." : null
+                Success = false,
+                StatusCode = statusCode,
+                Message = message,
+                Errors = errors,
+                Details = _env.IsDevelopment() && statusCode == (int)HttpStatusCode.InternalServerError
+                    ? exception.ToString()
+                    : null
             };
 
-            var json = JsonSerializer.Serialize(response, new JsonSerializerOptions
-            {
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-            });
-
+            var json = JsonSerializer.Serialize(errorResponse, JsonOptions);
             return context.Response.WriteAsync(json);
         }
     }
