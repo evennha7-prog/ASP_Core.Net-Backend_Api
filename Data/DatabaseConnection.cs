@@ -33,9 +33,8 @@ namespace backend_api.Data
         {
             try
             {
-                // Retrieve connection strings from configuration or fallback to local SQL Server Express defaults
-                var masterConnStr = _configuration.GetConnectionString("MasterConnection")
-                    ?? "Server=.\\SQLEXPRESS;Database=master;Integrated Security=True;TrustServerCertificate=True;";
+                // Retrieve connection strings from configuration
+                var masterConnStr = _configuration.GetConnectionString("MasterConnection");
                 var defaultConnStr = _configuration.GetConnectionString("DefaultConnection")
                     ?? "Server=.\\SQLEXPRESS;Database=Backend_DB;Integrated Security=True;TrustServerCertificate=True;";
 
