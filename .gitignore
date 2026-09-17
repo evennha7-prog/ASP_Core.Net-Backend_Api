@@ -1,0 +1,40 @@
+## Build results & binaries
+[Bb]in/
+[Oo]bj/
+[Pp]ublish/
+publish_backend.zip
+*.zip
+*.tar.gz
+
+## Visual Studio & IDE files
+.vs/
+*.user
+*.userprefs
+*.suo
+*.sln.docstates
+.vscode/
+.idea/
+
+## User-specific & local files
+*.dbmdl
+*.jfm
+*.pfx
+*.key
+
+## Environment & Secrets (Security)
+appsettings.Development.json
+appsettings.Local.json
+*.local.json
+*.env
+*.env.*
+
+## Database local files & backups
+*.mdf
+*.ldf
+*.bak
+
+## Log & temporary files
+*.log
+scratch/
+_upgradeLog*
+UpgradeLog*
